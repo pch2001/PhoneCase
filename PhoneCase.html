@@ -1,0 +1,841 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>Phone Case</title>
+
+</head>
+
+<body>
+    <h1> 핸드폰 케이스 꾸미기 </h1>
+    <button id="changeCaseColor"> 케이스에 색 변경 적용하기</button>
+    <button id="RemoveCase"> 케이스 제거하기</button><br></br>
+    <label for="colorPicker">케이스 색깔 선택하기</label>
+    <input type="color" id="colorPicker" value="#808080"><br></br>
+    <label for="lang"> 케이스 재질 선택 하기 </label>
+    <select name="materials" id="lang">
+        <option value="hard">Hard case</option>
+        <option value="mirror">Mirror case</option>
+        <option value="plastic">Plastic case</option>
+        <option value="silicon">Transparent case</option>
+    </select>
+    <h3>캐릭터 이미지 삽입하기</h3>
+    <select id="image-selector">
+        <option value="1">Image 1</option>
+        <option value="2">Image 2</option>
+        <option value="3">Image 3</option>
+        <option value="4">Image 4</option>
+        <option value="5">Image 5</option>
+        <option value="6">Image 6</option>
+        <option value="7">Image 7</option>
+    </select> 
+    <button id="add-image"> 캐릭터 이미지 변경</button> <button id="delete-image"> 캐릭터 이미지 삭제 </button> <br></br>
+   
+
+
+
+    <script type="x-shader/x-vertex" id="phongEnvVS">
+        varying vec3 fNormal, fViewPos;
+
+        void main(){
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+
+            fNormal = normalize(normalMatrix * normal);
+            fViewPos = (modelViewMatrix * vec4(position, 1.0)).xyz;
+        }
+    </script>
+    <script type="x-shader/x-fragment" id="phongEnvFS">
+        precision mediump float;
+
+            varying vec3 fNormal, fViewPos;
+        uniform samplerCube texImage;
+        void main(){
+            vec3 N = normalize(fNormal);
+            vec3 V = normalize(-fViewPos);
+            vec3 R = reflect(V, N);
+
+            gl_FragColor = textureCube(texImage, R);
+        }
+
+    </script>
+    <script type="x-shader/x-vertex" id="phongTexVS">
+
+        varying vec3 fNormal, fWorldPos;
+        varying vec2 fTexCoord;
+
+            void main(){
+                gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0);
+
+                fNormal = normalize(normalMatrix * normal);
+                fWorldPos = (modelMatrix * vec4(position, 1.0)).xyz; // 월드 좌표계에 픽셀값
+                fTexCoord = uv;
+            }
+        </script>
+    <script type="x-shader/x-fragment" id="phongTexFS">
+            precision mediump float;
+
+            uniform vec3 lightDir;
+            uniform vec4 lightAmbient, lightDiffuse, lightSpecular;
+            uniform vec4 matAmbient, matDiffuse, matSpecular;
+            uniform float matShininess;
+
+            varying vec3 fNormal, fWorldPos;
+            varying vec2 fTexCoord;
+            uniform sampler2D texImage;
+
+            void main(){
+                vec4 ambient = lightAmbient * matAmbient;
+
+                vec3 N = normalize(fNormal);
+                vec3 L = normalize(lightDir);
+                float kd = max(dot(L, N), 0.0);
+                vec4 diffuse = kd * lightDiffuse * matDiffuse;
+
+                vec3 V = normalize(cameraPosition - fWorldPos);
+                vec3 H = normalize(L+V);
+                float ks = pow(max(dot(N, H), 0.0), matShininess);
+                vec4 specular = ks * lightSpecular * matSpecular;
+
+                gl_FragColor = ambient + diffuse + specular;
+                gl_FragColor = texture2D(texImage, fTexCoord);
+                gl_FragColor.a = 1.0;
+            }
+        </script>
+    <script type="x-shader/x-vertex" id="phongVS">
+            varying vec3 fNormal, fWorldPos;
+
+            void main(){
+                gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0);
+
+                fNormal = normalize(normalMatrix * normal);
+                fWorldPos = (modelMatrix * vec4(position, 1.0)).xyz; // 월드 좌표계에 픽셀값
+            }
+        </script>
+    <script type="x-shader/x-fragment" id="phongFS">
+            precision mediump float;
+
+            uniform vec3 lightDir;
+            uniform vec4 lightAmbient, lightDiffuse, lightSpecular;
+            uniform vec4 matAmbient, matDiffuse, matSpecular;
+            uniform float matShininess;
+
+            varying vec3 fNormal, fWorldPos;
+
+            void main(){
+                vec4 ambient = lightAmbient * matAmbient;
+
+                vec3 N = normalize(fNormal);
+                vec3 L = normalize(lightDir);
+                float kd = max(dot(L, N), 0.0);
+                vec4 diffuse = kd * lightDiffuse * matDiffuse;
+
+                vec3 V = normalize(cameraPosition - fWorldPos);
+                vec3 H = normalize(L+V);
+                float ks = pow(max(dot(N, H), 0.0), matShininess);
+                vec4 specular = ks * lightSpecular * matSpecular;
+
+                gl_FragColor = ambient + diffuse + specular;
+                gl_FragColor.a = 1.0;
+            }
+    </script>
+    <script type="x-shader/x-vertex" id="alphaVS">
+        void main(){
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+    </script>
+    <script type="x-shader/x-fragment" id="alphaFS">
+        precision mediump float;
+
+        uniform vec4 uColor;
+
+        void main(){
+            gl_FragColor = uColor;
+        }
+    </script>
+    <script type="importmap">
+            {
+                "imports": {
+                    "three": "https://unpkg.com/three/build/three.module.js",
+                    "three/addons/": "https://unpkg.com/three/examples/jsm/"
+                }
+            }
+        </script>
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        let currentBoxes = [];  // 케이스 재생성시 사용
+        let scene, camera, renderer, controls;
+        let iphone, frontiphone, backCamera1, backCamera2;
+        // iphone = 본체, frontiphone = 전면, backCamera1,2 = 반사되는 카메라
+        var lightDir = [0, 2, 2];
+        let modeName;
+
+        init();
+        animate();
+
+        function init() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xafafaf);
+
+            const aspectRatio = window.innerWidth / window.innerHeight;
+            camera = new THREE.PerspectiveCamera(90, aspectRatio, 0.001, 1000);
+            camera.position.y = 3;
+            camera.position.z = 3;
+
+            renderer = new THREE.WebGLRenderer();
+            renderer.setSize(window.innerWidth * 0.5, window.innerHeight * 0.5);
+            document.body.appendChild(renderer.domElement);
+
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.maxPolarAngle = Math.PI / 2;
+
+
+            // ==================================================================================== 아이폰 본체
+            const vertices = new Float32Array([
+                -0.33, -0.7, 0.05,
+                0.33, -0.7, 0.05,
+                0.33, 0.7, 0.05,
+                -0.33, 0.7, 0.05,         // 앞
+                -0.35, -0.7, -0.05,
+                0.35, -0.7, -0.05,
+                0.35, 0.7, -0.05,
+                -0.35, 0.7, -0.05,     // 뒤
+                -0.35, 0.7, 0.05,
+                0.35, 0.7, 0.05,
+                0.35, 0.7, -0.05,
+                -0.35, 0.7, -0.05,         // 상
+                -0.35, -0.7, 0.05,
+                0.35, -0.7, 0.05,
+                0.35, -0.7, -0.05,
+                -0.35, -0.7, -0.05,     // 하
+                0.35, -0.7, 0.05,
+                0.35, 0.7, 0.05,
+                0.35, 0.7, -0.05,
+                0.35, -0.7, -0.05,          // 우
+                -0.35, -0.7, 0.05,
+                -0.35, 0.7, 0.05,
+                -0.35, 0.7, -0.05,
+                -0.35, -0.7, -0.05,        // 좌
+            ]);
+
+            const normals = new Float32Array([
+                0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1,
+                0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1,
+                0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0,
+                0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0,
+                1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0,
+                -1, 0,
+            ]);
+
+            const indices = [
+                0, 1, 2, 0, 2, 3,  // 전면
+                4, 5, 6, 4, 6, 7,  // 후면
+                8, 9, 10, 8, 10, 11,  // 상
+                12, 13, 14, 12, 14, 15,  // 하
+                16, 17, 18, 16, 18, 19,  // 우
+                20, 21, 22, 20, 22, 23,  // 좌
+                //28, 30, 36, 30, 38, 36,  // Connect front and back
+                //31, 29, 39, 29, 37, 39,  // Connect front and back
+                //31, 30, 39, 30, 38, 39,  // Connect front and back
+                //28, 29, 36, 29, 37, 36,  // Connect front and back
+
+                //44, 46, 52, 46, 54, 52,  // Connect front and back
+                //47, 45, 55, 45, 53, 55,  // Connect front and back
+                //47, 46, 55, 46, 54, 55,  // Connect front and back
+                //44, 45, 52, 45, 53, 52   // Connect front and back
+            ];
+
+            const geometry = new THREE.BufferGeometry();
+            geometry.setIndex(indices);
+            geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+            geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+
+            const material = new THREE.ShaderMaterial({
+                side: THREE.DoubleSide,
+                uniforms: {
+                    lightDir: { value: lightDir },
+                    lightAmbient: { value: [0.2, 0.2, 0.2, 1.0] },
+                    lightDiffuse: { value: [1.0, 1.0, 1.0, 1.0] },
+                    lightSpecular: { value: [1.0, 1.0, 1.0, 1.0] },
+                    matAmbient: { value: [0.2, 0.2, 0.2, 1.0] },
+                    matDiffuse: { value: [0.8, 0.8, 0.8, 1.0] },
+                    matSpecular: { value: [0.5, 0.5, 0.5, 1.0] },
+                    matShininess: { value: 50 },
+                },
+                vertexShader: document.getElementById("phongVS").textContent,
+                fragmentShader: document.getElementById("phongFS").textContent
+            });
+            iphone = new THREE.Mesh(geometry, material);
+            scene.add(iphone);
+
+
+
+            //========================================================================================================== 전면 화면
+
+            const frontvertices = new Float32Array([
+                -0.35, -0.7, 0.06,
+                0.35, -0.7, 0.06,
+                0.35, 0.7, 0.06,
+                -0.35, 0.7, 0.06,
+            ]);
+
+            const frontnormals = new Float32Array([
+                0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1,
+            ]);
+            const frontindices = [
+                0, 1, 2, 0, 2, 3,
+            ];
+
+            const frontuvs = new Float32Array([
+                0, 0,
+                1, 0,
+                1, 1,
+                0, 1
+            ]);
+            const frontgeometry = new THREE.BufferGeometry();
+            frontgeometry.setIndex(frontindices);
+            frontgeometry.setAttribute('position', new THREE.Float32BufferAttribute(frontvertices, 3));
+            frontgeometry.setAttribute('normal', new THREE.Float32BufferAttribute(frontnormals, 3));
+            frontgeometry.setAttribute('uv', new THREE.Float32BufferAttribute(frontuvs, 2));
+
+            const fronttexture = new THREE.TextureLoader().load('f1.bmp');
+            const frontmaterial = new THREE.ShaderMaterial({
+                uniforms: {
+                    lightDir: { value: lightDir },
+                    lightAmbient: { value: [0.2, 0.2, 0.2, 1.0] },
+                    lightDiffuse: { value: [1.0, 1.0, 1.0, 1.0] },
+                    lightSpecular: { value: [1.0, 1.0, 1.0, 1.0] },
+                    matAmbient: { value: [0.2, 0.2, 0.2, 1.0] },
+                    matDiffuse: { value: [0.8, 0.8, 0.8, 1.0] },
+                    matSpecular: { value: [0.5, 0.5, 0.5, 1.0] },
+                    matShininess: { value: 50 },
+                    texImage: { value: fronttexture },
+                },
+                vertexShader: document.getElementById("phongTexVS").textContent,
+                fragmentShader: document.getElementById("phongTexFS").textContent
+            });
+            frontiphone = new THREE.Mesh(frontgeometry, frontmaterial);
+            scene.add(frontiphone);
+
+
+            //===================================================================================================== 동그란 카메라 두개
+            const cameraGeometry = new THREE.CylinderGeometry(0.03, 0.03, 0.02, 32);
+            const texture = new THREE.CubeTextureLoader().load(['LobbyXPos.bmp', 'LobbyXNeg.bmp',
+                'LobbyYPos.bmp', 'LobbyYNeg.bmp', 'LobbyZPos.bmp', 'LobbyZNeg.bmp'
+            ]);
+            const cameraMaterial = new THREE.ShaderMaterial({
+                uniforms: {
+                    texImage: { value: texture },
+                },
+                vertexShader: document.getElementById("phongEnvVS").textContent,
+                fragmentShader: document.getElementById("phongEnvFS").textContent
+            });
+
+            const backCamera1 = new THREE.Mesh(cameraGeometry, cameraMaterial);
+            backCamera1.rotation.x = Math.PI / 2; // 카메라 회전시키기
+            backCamera1.position.set(0.23, 0.60, -0.08);
+            const backCamera2 = new THREE.Mesh(cameraGeometry, cameraMaterial);
+            backCamera2.rotation.x = Math.PI / 2;
+            backCamera2.position.set(0.23, 0.50, -0.08);    // 카메라 모형 생성 후 뒤집은 다음 이 자리에 위치 시키기
+
+            scene.add(backCamera1);
+            scene.add(backCamera2);
+            //========================================================================================================= 좌우 버튼
+            const rightButtonVertices = new Float32Array([
+                0.30, 0.20, 0.02,
+                0.37, 0.20, 0.02,
+                0.37, 0.30, 0.02,
+                0.30, 0.30, 0.02,//
+                0.30, 0.20, -0.02,
+                0.37, 0.20, -0.02,
+                0.37, 0.30, -0.02,
+                0.30, 0.30, -0.02,//
+                0.30, 0.30, 0.02,
+                0.37, 0.30, 0.02,
+                0.37, 0.30, -0.02,
+                0.30, 0.30, -0.02,//
+                0.30, 0.20, 0.02,
+                0.37, 0.20, 0.02,
+                0.37, 0.20, -0.02,
+                0.30, 0.20, -0.02,
+                0.37, 0.20, 0.02,//
+                0.37, 0.30, 0.02,
+                0.37, 0.30, -0.02,
+                0.37, 0.20, -0.02,
+                0.30, 0.20, 0.02,//
+                0.30, 0.30, 0.02,
+                0.30, 0.30, -0.02,
+                0.30, 0.20, -0.02
+            ]);
+
+            const LeftButtonVertices_1 = new Float32Array([
+                -0.30, 0.27, 0.02,
+                -0.37, 0.27, 0.02,
+                -0.37, 0.33, 0.02,
+                -0.30, 0.33, 0.02,//
+                -0.30, 0.27, -0.02,
+                -0.37, 0.27, -0.02,
+                -0.37, 0.33, -0.02,
+                -0.30, 0.33, -0.02,//
+                -0.30, 0.33, 0.02,
+                -0.37, 0.33, 0.02,
+                -0.37, 0.33, -0.02,
+                -0.30, 0.33, -0.02,//
+                -0.30, 0.27, 0.02,
+                -0.37, 0.27, 0.02,
+                -0.37, 0.27, -0.02,
+                -0.30, 0.27, -0.02,//
+                -0.37, 0.27, 0.02,
+                -0.37, 0.33, 0.02,
+                -0.37, 0.33, -0.02,
+                -0.37, 0.27, -0.02,//
+                -0.30, 0.27, 0.02,
+                -0.30, 0.33, 0.02,
+                -0.30, 0.33, -0.02,
+                -0.30, 0.27, -0.02
+            ]);
+
+            const LeftButtonVertices_2 = new Float32Array([
+                -0.30, 0.37, 0.02,
+                -0.37, 0.37, 0.02,
+                -0.37, 0.43, 0.02,
+                -0.30, 0.43, 0.02,//
+                -0.30, 0.37, -0.02,
+                -0.37, 0.37, -0.02,
+                -0.37, 0.43, -0.02,
+                -0.30, 0.43, -0.02,//
+                -0.30, 0.43, 0.02,
+                -0.37, 0.43, 0.02,
+                -0.37, 0.43, -0.02,
+                -0.30, 0.43, -0.02,//
+                -0.30, 0.37, 0.02,
+                -0.37, 0.37, 0.02,
+                -0.37, 0.37, -0.02,
+                -0.30, 0.37, -0.02,//
+                -0.37, 0.37, 0.02,
+                -0.37, 0.43, 0.02,
+                -0.37, 0.43, -0.02,
+                -0.37, 0.37, -0.02,//
+                -0.30, 0.37, 0.02,
+                -0.30, 0.43, 0.02,
+                -0.30, 0.43, -0.02,
+                -0.30, 0.37, -0.02
+            ]);
+
+
+            const ButtonNormals = new Float32Array([
+                0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1,
+                0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1,
+                0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0,
+                0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0,
+                1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0,
+                -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+            ]);
+
+            const ButtonIndices = [
+                0, 1, 2, 0, 2, 3,      // 앞
+                4, 5, 6, 4, 6, 7,      // 뒤
+                8, 9, 10, 8, 10, 11,   // 
+                12, 13, 14, 12, 14, 15, // 
+                16, 17, 18, 16, 18, 19, // 
+                20, 21, 22, 20, 22, 23  // 
+            ];
+
+
+            const rightButtonGeometry = new THREE.BufferGeometry();
+            rightButtonGeometry.setIndex(ButtonIndices);
+            rightButtonGeometry.setAttribute('position', new THREE.Float32BufferAttribute(rightButtonVertices, 3));
+            rightButtonGeometry.setAttribute('normal', new THREE.Float32BufferAttribute(ButtonNormals, 3));    //오른쪽 버튼
+
+            const leftButtonGeometry_1 = new THREE.BufferGeometry();
+            leftButtonGeometry_1.setIndex(ButtonIndices);
+            leftButtonGeometry_1.setAttribute('position', new THREE.Float32BufferAttribute(LeftButtonVertices_1, 3));
+            leftButtonGeometry_1.setAttribute('normal', new THREE.Float32BufferAttribute(ButtonNormals, 3));   //+ 버튼
+
+            const leftButtonGeometry_2 = new THREE.BufferGeometry();
+            leftButtonGeometry_2.setIndex(ButtonIndices);
+            leftButtonGeometry_2.setAttribute('position', new THREE.Float32BufferAttribute(LeftButtonVertices_2, 3));
+            leftButtonGeometry_2.setAttribute('normal', new THREE.Float32BufferAttribute(ButtonNormals, 3));   //- 버튼
+
+            const sideMaterial = new THREE.MeshPhongMaterial({
+                side: THREE.DoubleSide,
+            });
+
+            const rightButton = new THREE.Mesh(rightButtonGeometry, sideMaterial);
+            const lefttButton_1 = new THREE.Mesh(leftButtonGeometry_1, sideMaterial);
+            const lefttButton_2 = new THREE.Mesh(leftButtonGeometry_2, sideMaterial);
+            scene.add(rightButton);
+            scene.add(lefttButton_1);
+            scene.add(lefttButton_2);
+            //=================================================================================================== 카메라 받침대
+            const newCubeVertices = new Float32Array([
+                0.10, 0.45, 0.02,
+                0.30, 0.45, 0.02,
+                0.30, 0.65, 0.02,
+                0.10, 0.65, 0.02, // 앞
+                0.10, 0.45, -0.08,
+                0.30, 0.45, -0.08,
+                0.30, 0.65, -0.08,
+                0.10, 0.65, -0.08, // 뒤
+                0.10, 0.65, 0.02,
+                0.30, 0.65, 0.02,
+                0.30, 0.65, -0.08,
+                0.10, 0.65, -0.08, // 상
+                0.10, 0.45, 0.02,
+                0.30, 0.45, 0.02,
+                0.30, 0.45, -0.08,
+                0.10, 0.45, -0.08, // 하
+                0.30, 0.45, 0.02,
+                0.30, 0.65, 0.02,
+                0.30, 0.65, -0.08,
+                0.30, 0.45, -0.08, // 우
+                0.10, 0.45, 0.02,
+                0.10, 0.65, 0.02,
+                0.10, 0.65, -0.08,
+                0.10, 0.45, -0.08, // 좌
+            ]);
+
+            const newCubeNormals = new Float32Array([
+                0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1,
+                0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1,
+                0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0,
+                0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0,
+                1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0,
+                -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+            ]);
+
+            const newCubeIndices = [
+                0, 1, 2, 0, 2, 3,
+                4, 5, 6, 4, 6, 7,
+                8, 9, 10, 8, 10, 11,
+                12, 13, 14, 12, 14, 15,
+                16, 17, 18, 16, 18, 19,
+                20, 21, 22, 20, 22, 23,
+            ];
+
+            const newCubeGeometry = new THREE.BufferGeometry();
+            newCubeGeometry.setIndex(newCubeIndices);
+            newCubeGeometry.setAttribute('position', new THREE.Float32BufferAttribute(newCubeVertices, 3));
+            newCubeGeometry.setAttribute('normal', new THREE.Float32BufferAttribute(newCubeNormals, 3));
+
+            const newCube = new THREE.Mesh(newCubeGeometry, sideMaterial);
+            scene.add(newCube);
+            //============================================================================================================케이스추가
+
+            function createMaterial(color) {        // 현재 선택한 색깔에 따라 변하는 재질 만들기
+                return new THREE.ShaderMaterial({
+                    side: THREE.DoubleSide,
+                    uniforms: {
+                        lightDir: { value: lightDir },
+                        lightAmbient: { value: [0.2, 0.2, 0.2, 1.0] },
+                        lightDiffuse: { value: [1.0, 1.0, 1.0, 1.0] },
+                        lightSpecular: { value: [1.0, 1.0, 1.0, 1.0] },
+                        matAmbient: { value: [color.r, color.g, color.b, 1.0] },
+                        matDiffuse: { value: [color.r, color.g, color.b, 1.0] },
+                        matSpecular: { value: [0.5, 0.5, 0.5, 1.0] },
+                        matShininess: { value: 50 },
+                    },
+                    vertexShader: document.getElementById("phongVS").textContent,
+                    fragmentShader: document.getElementById("phongFS").textContent
+                });
+            }
+
+            function clearBoxes() {         // clearBoxes => 케이스 제거
+                currentBoxes.forEach(box => {
+                    scene.remove(box);
+                });
+                currentBoxes = [];
+            }
+
+            document.getElementById('RemoveCase').addEventListener('click', clearBoxes); // 케이스 제거
+
+            const boxGeometry = new THREE.BoxGeometry(10, 1.4, 0.1);
+            const frontBoxGeometry = new THREE.BoxGeometry(0.7, 1.4, 0.1);
+
+            const positions = [
+                { x: 0, y: 0, z: -0.01 },
+                { x: 0, y: 0.01, z: 0 },
+                { x: 0, y: -0.01, z: 0 },
+                { x: 0.025, y: 0, z: 0 },
+                { x: -0.025, y: 0, z: 0 }
+            ];
+
+
+
+
+            document.getElementById('changeCaseColor').addEventListener('click', (evnet) => {
+                const colorHex = document.getElementById('colorPicker').value;
+                const color = new THREE.Color(colorHex);
+                const material = createMaterial(color);
+                clearBoxes();
+                const alphaMaterial = new THREE.ShaderMaterial({
+                    uniforms: {
+                        uColor: { value: [color.r, color.g, color.b, 0.1] },
+                    },
+                    vertexShader: document.getElementById("alphaVS").textContent,
+                    fragmentShader: document.getElementById("alphaFS").textContent,
+                    side: THREE.DoubleSide, //원래는 뒷면이 안나오면 그리지 않는다.
+                    depthTest: true,   //뒤를 안그리면 안되니까 fasle
+                    transparent: true,
+                    blending: THREE.CustomBlending,
+                    blendEquation: THREE.AddEquation,
+                    blendSrc: THREE.SrcAlphaFactor,
+                    blendDst: THREE.OneMinusSrcAlphaFactor,
+                });
+
+                const plasticMaterial = new THREE.ShaderMaterial({
+                    side: THREE.DoubleSide,
+                    uniforms: {
+                        lightDir: { value: lightDir },
+                        lightAmbient: { value: [0.1, 0.1, 1, 1.0] },
+                        lightDiffuse: { value: [1.0, 1.0, 1.0, 1.0] },
+                        lightSpecular: { value: [1.0, 1.0, 1.0, 1.0] },
+                        matAmbient: { value: [color.r, color.g, color.b, 1.0] },
+                        matDiffuse: { value: [color.r, color.g, color.b, 1.0] },
+                        matSpecular: { value: [1.0, 1.0, 1.0, 1.0] },
+                        matShininess: { value: 100 },
+                    },
+                    vertexShader: document.getElementById("phongVS").textContent,
+                    fragmentShader: document.getElementById("phongFS").textContent
+                });
+                positions.forEach(position => {     // 케이스 생성 코드
+                    const geometry = position.z === -0.05 ? boxGeometry : frontBoxGeometry;
+
+                    if (modeName == 1) {
+                        const box = new THREE.Mesh(geometry, material);
+                        box.position.set(position.x, position.y, position.z);
+                        scene.add(box);
+                        currentBoxes.push(box);
+                    } else if (modeName == 3) {
+                        const box = new THREE.Mesh(geometry, plasticMaterial);
+                        box.position.set(position.x, position.y, position.z);
+                        scene.add(box);
+                        currentBoxes.push(box);
+                    } else if (modeName == 4) {
+                        const box = new THREE.Mesh(geometry, alphaMaterial);
+                        box.position.set(position.x, position.y, position.z);
+                        scene.add(box);
+                        currentBoxes.push(box);
+                    } else if (modeName == 2) {
+                        return;
+                    }
+
+
+                });
+            });
+
+
+            //============================================재질변경
+
+
+            document.addEventListener('DOMContentLoaded', (event) => {
+                const langSelect = document.getElementById('lang');
+                langSelect.addEventListener('change', (event) => {
+                    const mode = event.target.value;
+                    const colorHex = document.getElementById('colorPicker').value;
+                    const color = new THREE.Color(colorHex);
+                    const material = createMaterial(color); // 변경한색으로 materila 생성
+
+
+
+                    const alphaMaterial = new THREE.ShaderMaterial({
+                        uniforms: {
+                            uColor: { value: [color.r, color.g, color.b, 0.1] },
+                        },
+                        vertexShader: document.getElementById("alphaVS").textContent,
+                        fragmentShader: document.getElementById("alphaFS").textContent,
+                        side: THREE.DoubleSide, //원래는 뒷면이 안나오면 그리지 않는다.
+                        depthTest: true,   //뒤를 안그리면 안되니까 fasle
+                        transparent: true,
+                        blending: THREE.CustomBlending,
+                        blendEquation: THREE.AddEquation,
+                        blendSrc: THREE.SrcAlphaFactor,
+                        blendDst: THREE.OneMinusSrcAlphaFactor,
+                    });
+
+                    const plasticMaterial = new THREE.ShaderMaterial({
+                        side: THREE.DoubleSide,
+                        uniforms: {
+                            lightDir: { value: lightDir },
+                            lightAmbient: { value: [0.1, 0.1, 1, 1.0] },
+                            lightDiffuse: { value: [1.0, 1.0, 1.0, 1.0] },
+                            lightSpecular: { value: [1.0, 1.0, 1.0, 1.0] },
+                            matAmbient: { value: [color.r, color.g, color.b, 1.0] },
+                            matDiffuse: { value: [color.r, color.g, color.b, 1.0] },
+                            matSpecular: { value: [1.0, 1.0, 1.0, 1.0] },
+                            matShininess: { value: 100 },
+                        },
+                        vertexShader: document.getElementById("phongVS").textContent,
+                        fragmentShader: document.getElementById("phongFS").textContent
+                    });
+
+                    // Change the material based on the selected option
+                    switch (mode) {
+                        case 'hard':
+                            modeName = 1;
+                            clearBoxes();
+                            positions.forEach(position => {
+                                const geometry = position.z === -0.05 ? boxGeometry : frontBoxGeometry;
+                                const box = new THREE.Mesh(geometry, material);
+                                box.position.set(position.x, position.y, position.z);
+                                scene.add(box);
+                                currentBoxes.push(box);
+                            });
+                            break;
+                        case 'mirror':
+                            alert("거울은 색 변경이 불가능 합니다");
+                            modeName = 2;
+                            clearBoxes();
+                            positions.forEach(position => {
+                                const geometry = position.z === -0.05 ? boxGeometry : frontBoxGeometry;
+                                const box = new THREE.Mesh(geometry, cameraMaterial);
+                                box.position.set(position.x, position.y, position.z);
+                                scene.add(box);
+                                currentBoxes.push(box);
+                            });
+                            break;
+                        case 'plastic':
+                            modeName = 3;
+                            clearBoxes();
+                            positions.forEach(position => {
+                                const geometry = position.z === -0.05 ? boxGeometry : frontBoxGeometry;
+                                const box = new THREE.Mesh(geometry, plasticMaterial);
+                                box.position.set(position.x, position.y, position.z);
+                                scene.add(box);
+                                currentBoxes.push(box);
+                            });
+                            break;
+                        case 'silicon':
+                            modeName = 4;
+                            clearBoxes();
+                            positions.forEach(position => {
+                                const geometry = position.z === -0.05 ? boxGeometry : frontBoxGeometry;
+                                const box = new THREE.Mesh(geometry, alphaMaterial);
+                                box.position.set(position.x, position.y, position.z);
+                                scene.add(box);
+                                currentBoxes.push(box);
+                            });
+                            break;
+                        default:
+                            break;
+                    }
+                });
+            });
+
+            //====================================================================================================== 스티커 추가
+
+
+            const stickerVertices = new Float32Array([
+                -0.15, -0.3, -0.07,
+                0.15, -0.3, -0.07,
+                0.15, 0.3, -0.07,
+                -0.15, 0.3, -0.07,
+            ]);
+
+            const stickerNormals = new Float32Array([
+                0, 0, -1, // Normal for first vertex
+                0, 0, -1, // Normal for second vertex
+                0, 0, -1, // Normal for third vertex
+                0, 0, -1, // Normal for fourth vertex
+            ]);
+
+            // Sticker indices (front face only)
+            const stickerIndices = [
+                0, 2, 1,
+                0, 3, 2,
+            ];
+
+            const stickerUVs = new Float32Array([
+                1.0, 0.0, // UV for first vertex
+                0.0, 0.0, // UV for second vertex
+                0.0, 1.0, // UV for third vertex
+                1.0, 1.0, // UV for fourth vertex
+            ]);
+
+            const st = new THREE.BufferGeometry();
+            st.setIndex(stickerIndices);
+            st.setAttribute('position', new THREE.Float32BufferAttribute(stickerVertices, 3));
+            st.setAttribute('normal', new THREE.Float32BufferAttribute(stickerNormals, 3));
+            st.setAttribute('uv', new THREE.Float32BufferAttribute(stickerUVs, 2));
+
+            const image1 = new THREE.TextureLoader().load('1.bmp');
+            const image2 = new THREE.TextureLoader().load('2.bmp');
+            const image3 = new THREE.TextureLoader().load('3.bmp');
+            const image4 = new THREE.TextureLoader().load('4.bmp');
+            const image5 = new THREE.TextureLoader().load('5.bmp');
+            const image6 = new THREE.TextureLoader().load('6.bmp');
+            const image7 = new THREE.TextureLoader().load('7.bmp');
+
+            let addImage = image1;
+
+            document.addEventListener('DOMContentLoaded', () => {
+                const imageSelector = document.getElementById('image-selector');
+                const addImageButton = document.getElementById('add-image');
+                const dleteImageButton = document.getElementById('delete-image')
+                addImageButton.addEventListener('click', () => {
+                    const selectedIndex = imageSelector.value;
+                    if (selectedIndex == 1) {
+                        addImage = image1;
+                    } else if (selectedIndex == 2) {
+                        addImage = image2;
+                    } else if (selectedIndex == 3) {
+                        addImage = image3;
+                    }else if (selectedIndex == 4) {
+                        addImage = image4;
+                    } else if (selectedIndex == 5) {
+                        addImage = image5;
+                    } else if (selectedIndex == 6) {
+                        addImage = image6;
+                    } else if (selectedIndex == 7) {
+                        addImage = image7;
+                    }
+
+                    const stickerMaterials = new THREE.ShaderMaterial({
+                        uniforms: {
+                            texImage: { value: addImage },
+                        },
+                        vertexShader: document.getElementById("phongTexVS").textContent,
+                        fragmentShader: document.getElementById("phongTexFS").textContent
+                    });
+                    
+
+                    const sticker = new THREE.Mesh(st, stickerMaterials);
+                    scene.add(sticker);
+                    dleteImageButton.addEventListener('click', () => {
+                        scene.remove(sticker);
+
+                        //alert('삭제');
+                    });
+                });
+            });
+
+
+
+
+
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        function onWindowResize() {
+            const aspectRatio = window.innerWidth / window.innerHeight;
+            camera.aspect = aspectRatio;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth * 0.5, window.innerHeight * 0.5);
+        }
+
+
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            //iphone.rotation.y += 0.01;
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+    </script>
+</body>
+
+</html>
