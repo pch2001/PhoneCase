@@ -1,7 +1,7 @@
 컴퓨터 그래픽스 수업을 받고 제작한 것입니다.
 모든 사진을 다운받은뒤 PhoneCase.html 파일을 실행하면 됩니다.
 
-
+시연 영상 : https://www.youtube.com/watch?v=2bCq9DDriIQ 
 
 
 
